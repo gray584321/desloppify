@@ -1,4 +1,4 @@
-"""Detect enum classes with zero external imports."""
+"""Detect enum classes with no references inside or outside their module."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ _ENUM_BASES = {"StrEnum", "IntEnum", "Enum"}
 
 
 def detect_unused_enums(path: Path) -> tuple[list[dict], int]:
-    """Find enum classes that are never imported by any other file.
+    """Find enum classes that are never referenced by scanned source.
 
     Returns ``(entries, total_files_checked)``.
     Each entry has: file, name, line, member_count.
@@ -25,6 +25,7 @@ def detect_unused_enums(path: Path) -> tuple[list[dict], int]:
     files = find_py_files(path)
     enum_defs: dict[str, list[dict]] = {}  # filepath → [{name, line, member_count}]
     imports_by_file: dict[str, set[str]] = {}  # filepath → {imported names}
+    references_by_file: dict[str, set[str]] = {}  # filepath → {referenced names}
 
     for filepath in files:
         try:
@@ -76,6 +77,11 @@ def detect_unused_enums(path: Path) -> tuple[list[dict], int]:
                 for alias in node.names:
                     imported.add(alias.name.split(".")[-1])
         imports_by_file[filepath] = imported
+        references_by_file[filepath] = {
+            node.id
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)
+        }
 
     if not enum_defs:
         return [], len(files)
@@ -92,15 +98,19 @@ def detect_unused_enums(path: Path) -> tuple[list[dict], int]:
             if name in all_enum_names and filepath not in all_enum_names[name]:
                 externally_imported.add(name)
 
-    # Phase 3: report enums with zero external imports.
+    # Phase 3: report enums with no external import or same-module reference.
     entries: list[dict] = []
     for filepath, defs in enum_defs.items():
         rpath = rel(filepath)
         for d in defs:
-            if d["name"] not in externally_imported:
+            name = d["name"]
+            is_referenced = (
+                name in externally_imported or name in references_by_file[filepath]
+            )
+            if not is_referenced:
                 entries.append({
                     "file": rpath,
-                    "name": d["name"],
+                    "name": name,
                     "line": d["line"],
                     "member_count": d["member_count"],
                 })

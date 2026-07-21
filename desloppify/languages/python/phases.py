@@ -202,7 +202,7 @@ def phase_uncalled_functions(
 def phase_unused_enums(
     path: Path, lang: LangRuntimeContract
 ) -> tuple[list[Issue], dict[str, int]]:
-    """Detect enum classes with zero external imports."""
+    """Detect enum classes with no references in scanned source."""
     entries, total = unused_enums_mod.detect_unused_enums(path)
     entries = filter_entries(lang.zone_map, entries, "unused_enums")
 
@@ -217,7 +217,7 @@ def phase_unused_enums(
                 confidence="high",
                 summary=(
                     f"Unused enum: {entry['name']} "
-                    f"({entry['member_count']} members) — never imported externally"
+                    f"({entry['member_count']} members) — never referenced"
                 ),
                 detail={
                     "line": entry["line"],
@@ -227,7 +227,7 @@ def phase_unused_enums(
         )
 
     if results:
-        log(f"         unused enums: {len(results)} enum classes with zero imports")
+        log(f"         unused enums: {len(results)} unreferenced enum classes")
     return results, {"unused_enums": adjust_potential(lang.zone_map, total)}
 
 __all__ = [

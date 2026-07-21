@@ -60,8 +60,8 @@ class TestDetectUnusedEnums:
         })
         assert len(entries) == 0
 
-    def test_self_usage_not_counted_as_external(self, tmp_path: Path):
-        """Enum referenced in its own file doesn't count as externally imported."""
+    def test_same_module_usage_counts_as_used(self, tmp_path: Path):
+        """Private implementation enums need not be imported by another module."""
         entries, _ = _run(tmp_path, {
             "enums.py": (
                 "from enum import StrEnum\n"
@@ -70,7 +70,19 @@ class TestDetectUnusedEnums:
                 "x = Status.ACTIVE\n"
             ),
         })
-        assert len(entries) == 1
+        assert len(entries) == 0
+
+    def test_same_module_annotation_counts_as_used(self, tmp_path: Path):
+        entries, _ = _run(tmp_path, {
+            "enums.py": (
+                "from enum import StrEnum\n"
+                "class Status(StrEnum):\n"
+                '    ACTIVE = "active"\n'
+                "def current() -> Status:\n"
+                "    return Status.ACTIVE\n"
+            ),
+        })
+        assert len(entries) == 0
 
     def test_multiple_enums_reports_only_unused(self, tmp_path: Path):
         entries, _ = _run(tmp_path, {
