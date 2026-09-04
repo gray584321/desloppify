@@ -5,8 +5,11 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 import desloppify.app.commands.runner.codex_batch as codex_batch_mod
 import desloppify.app.commands.runner.run_logs as run_logs_mod
+from desloppify.base.exception_sets import CommandError
 
 
 def test_wrap_cmd_c_collapses_arguments_into_single_string() -> None:
@@ -178,12 +181,12 @@ def test_codex_batch_command_uses_sanitized_reasoning_effort(monkeypatch, tmp_pa
     assert str(tmp_path) in command
 
     monkeypatch.setenv("DESLOPPIFY_CODEX_REASONING_EFFORT", "invalid")
-    command = codex_batch_mod.codex_batch_command(
-        prompt="review prompt",
-        repo_root=tmp_path,
-        output_file=tmp_path / "out.json",
-    )
-    assert f'model_reasoning_effort="low"' in command
+    with pytest.raises(CommandError, match="Invalid DESLOPPIFY_CODEX_REASONING_EFFORT"):
+        codex_batch_mod.codex_batch_command(
+            prompt="review prompt",
+            repo_root=tmp_path,
+            output_file=tmp_path / "out.json",
+        )
 
 
 def test_codex_batch_command_uses_sandbox_env_override(monkeypatch, tmp_path: Path) -> None:

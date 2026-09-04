@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 import subprocess  # nosec
 import threading
 import time
+from collections.abc import Callable
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -13,6 +13,7 @@ from pathlib import Path
 from desloppify.app.commands.review.runner_failures import (
     TRANSIENT_RUNNER_PHRASES as _TRANSIENT_RUNNER_PHRASES,
 )
+from desloppify.app.commands.review.runner_failures import classify_runner_failure
 
 from .attempt_success import handle_successful_attempt_core
 from .io import (
@@ -491,7 +492,11 @@ def handle_failed_attempt(
     log_sections: list[str],
 ) -> int | None:
     combined = f"{result.stdout_text}\n{result.stderr_text}".lower()
-    is_transient = any(needle in combined for needle in _TRANSIENT_RUNNER_PHRASES)
+    # A rejected model may also emit "no last agent message". Retrying that
+    # deterministic configuration error cannot recover it.
+    is_transient = classify_runner_failure(combined) != "model_config" and any(
+        needle in combined for needle in _TRANSIENT_RUNNER_PHRASES
+    )
     if not is_transient or attempt >= max_attempts:
         deps.safe_write_text_fn(log_file, "\n\n".join(log_sections))
         return result.code

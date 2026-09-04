@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import sys
 from pathlib import Path
 
@@ -43,7 +44,21 @@ _RUNNER_AUTH_PHRASES = (
     "please login",
     "access token",
 )
+_MODEL_CONFIG_PATTERNS = (
+    r"\bmodel_not_found\b",
+    r"\bmodel\b(?!\s+metadata\b)[^\n]*(?:does not exist|not found|not supported|not available|do not have access|requires a newer version)",
+    r"(?:unsupported|unknown|invalid) model:",
+    r"(?:reasoning[._ ]effort|model_reasoning_effort)[^\n]*(?:unsupported|not supported|invalid|unknown variant)",
+    r"(?:unsupported|invalid|unknown variant)[^\n]*(?:reasoning[._ ]effort|model_reasoning_effort)",
+    r"unsupported value:[^\n]*not supported[^\n]*\bmodel\b",
+)
 _FAILURE_HINT_BY_CATEGORY = {
+    "model_config": (
+        "Runner rejected the model or reasoning effort. Update the Codex CLI and "
+        "check model access with `codex -m <model>`. For Codex, set "
+        "`DESLOPPIFY_CODEX_MODEL` and `DESLOPPIFY_CODEX_REASONING_EFFORT` to a "
+        "supported combination, or unset them to use your Codex configuration."
+    ),
     "runner_missing": (
         "Runner CLI not found on PATH. "
         "Install the runner (codex, opencode, or acli for rovodev) and verify it is on your PATH."
@@ -114,6 +129,8 @@ def classify_runner_failure(log_text: str) -> str:
         return "timeout"
     if _is_usage_limit_failure(text):
         return "usage_limit"
+    if any(re.search(pattern, text) for pattern in _MODEL_CONFIG_PATTERNS):
+        return "model_config"
     if any(phrase in text for phrase in TRANSIENT_RUNNER_PHRASES):
         return "stream_disconnect"
     if _is_runner_missing(text):
@@ -262,6 +279,7 @@ def _print_failures_report(
             "timeout": "timeout",
             "stream_disconnect": "stream disconnect",
             "usage_limit": "usage limit",
+            "model_config": "model configuration",
             "runner_missing": "runner missing",
             "runner_auth": "runner auth",
             "runner_exception": "runner exception",

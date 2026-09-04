@@ -4,6 +4,8 @@
 
 Desloppify gives your AI coding agent the tools to identify, understand, and systematically improve codebase quality. It combines mechanical detection (dead code, duplication, complexity) with subjective LLM review (naming, abstractions, module boundaries), then works through a prioritized fix loop. State persists across scans so it chips away over multiple sessions, and the scoring is designed to resist gaming.
 
+This is [gray584321's fork](https://github.com/gray584321/desloppify) of [Peter O'Malley's Desloppify](https://github.com/peteromallet/desloppify), with Codex model selection and reasoning support for GPT-6 Astra and the GPT-5.6 family. Review and triage inherit your Codex configuration, with optional `DESLOPPIFY_CODEX_MODEL` and `DESLOPPIFY_CODEX_REASONING_EFFORT` overrides. See [Codex setup and examples](docs/CODEX.md). Install from this fork using the command below; the PyPI package is maintained upstream.
+
 <img src="assets/explained.png" width="100%">
 
 The score gives your agent a north-star, and the tooling helps it plan, execute, and resolve issues until it hits your target — with a lot of tricks to keep it on track. A score above 98 should correlate with a codebase a seasoned engineer would call beautiful.
@@ -22,8 +24,8 @@ Paste this prompt into your agent:
 I want you to improve the quality of this codebase. To do this, install and run desloppify.
 Run ALL of the following (requires Python 3.11+):
 
-pip install --upgrade "desloppify[full]"
-desloppify update-skill claude    # installs the full workflow guide — pick yours: claude, cursor, codex, copilot, droid, windsurf, gemini, rovodev
+pip install --upgrade "desloppify[full] @ git+https://github.com/gray584321/desloppify.git@main"
+desloppify update-skill codex     # installs the full workflow guide — pick yours: claude, cursor, codex, copilot, droid, windsurf, gemini, rovodev
 
 Add .desloppify/ to your .gitignore — it contains local state that shouldn't be committed.
 
@@ -95,7 +97,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install --upgrade "desloppify[full]"
+      - run: pip install --upgrade "desloppify[full] @ git+https://github.com/gray584321/desloppify.git@main"
       - run: desloppify scan --path . --profile ci --no-badge
       - run: desloppify status --json
 ```

@@ -16,13 +16,26 @@ from desloppify.app.commands.review.runner_process_impl.attempts import (
     resolve_retry_config,
     run_batch_attempt,
 )
-from desloppify.app.commands.review.runner_process_impl.io import extract_payload_from_log
+from desloppify.app.commands.review.runner_process_impl.io import (
+    extract_payload_from_log,
+)
 from desloppify.app.commands.review.runner_process_impl.types import (
     CodexBatchRunnerDeps,
     FollowupScanDeps,
 )
+from desloppify.base.exception_sets import CommandError
 
 _PROMPT_ARG_MAX_CHARS = 16_000
+_REASONING_EFFORTS = (
+    "none",
+    "minimal",
+    "low",
+    "medium",
+    "high",
+    "xhigh",
+    "max",
+    "ultra",
+)
 
 
 def _resolve_executable(name: str) -> list[str]:
@@ -82,15 +95,25 @@ def _prompt_via_stdin(prompt: str) -> bool:
     return sys.platform == "win32" or len(prompt) > _PROMPT_ARG_MAX_CHARS
 
 
-def codex_batch_command(*, prompt: str, repo_root: Path, output_file: Path) -> list[str]:
-    """Build one codex exec command line for a batch prompt."""
-    effort = os.environ.get("DESLOPPIFY_CODEX_REASONING_EFFORT", "low").strip().lower()
-    if effort not in {"low", "medium", "high", "xhigh"}:
-        effort = "low"
-    sandbox = os.environ.get("DESLOPPIFY_CODEX_SANDBOX", "workspace-write").strip().lower()
+def codex_batch_command(
+    *, prompt: str, repo_root: Path, output_file: Path
+) -> list[str]:
+    """Build a batch command, inheriting Codex's model settings unless overridden."""
+    model = os.environ.get("DESLOPPIFY_CODEX_MODEL", "").strip()
+    effort = os.environ.get("DESLOPPIFY_CODEX_REASONING_EFFORT", "").strip().lower()
+    if effort and effort not in _REASONING_EFFORTS:
+        raise CommandError(
+            f"Invalid DESLOPPIFY_CODEX_REASONING_EFFORT: {effort!r}. "
+            f"Choose {', '.join(_REASONING_EFFORTS)}, or unset it to inherit "
+            "your Codex configuration. Available levels depend on the model and Codex CLI."
+        )
+    sandbox = (
+        os.environ.get("DESLOPPIFY_CODEX_SANDBOX", "workspace-write").strip().lower()
+    )
     if sandbox not in {"read-only", "workspace-write", "danger-full-access"}:
         sandbox = "workspace-write"
-    prefix = _resolve_executable("codex")
+    executable = os.environ.get("DESLOPPIFY_CODEX_CLI_PATH", "").strip() or "codex"
+    prefix = _resolve_executable(executable)
     cmd = [
         *prefix,
         "exec",
@@ -101,12 +124,20 @@ def codex_batch_command(*, prompt: str, repo_root: Path, output_file: Path) -> l
         sandbox,
         "-c",
         'approval_policy="never"',
-        "-c",
-        f'model_reasoning_effort="{effort}"',
-        "-o",
-        str(output_file),
-        "-" if _prompt_via_stdin(prompt) else prompt,
     ]
+    # Pass model IDs through unchanged: Codex owns model availability, including
+    # account-specific models and future releases. Never silently substitute one.
+    if model:
+        cmd.extend(["--model", model])
+    if effort:
+        cmd.extend(["-c", f'model_reasoning_effort="{effort}"'])
+    cmd.extend(
+        [
+            "-o",
+            str(output_file),
+            "-" if _prompt_via_stdin(prompt) else prompt,
+        ]
+    )
     return _wrap_cmd_c(cmd)
 
 
